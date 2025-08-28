@@ -95,4 +95,8 @@ int unload() {
 	return (0);
 }
 
+int multi_threading_compatible() {
+	return (1);
+}
+
 } // end extern "C"

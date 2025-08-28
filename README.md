@@ -86,6 +86,128 @@ dmg2img NetBoot9.dmg NetBoot9.img
 
 Keep `NetBoot.pax.gz` around, you'll need it later.
 
+## Setup DHCP Server (Kea)
+
+> [!NOTE]
+> DHCP is a broadcast protocol and by default Kea will interfere with any
+> existing DHCP server. I personally keep all my retro systems on a separate
+> layer 2 VLAN using Kea as the DHCP server, and I have not needed to
+> experiment with ways to integrate with an existing service. You could
+> potentially try to filter by MAC addresses if your existing server allows it
+> (see [here](https://www.mail-archive.com/kea-users@lists.isc.org/msg04380.html)
+> for Kea-side configuration), but I do not know how well that would work in
+> practice. If you do get something like that working feel free to send a PR
+> with instructions.
+
+Kea has a powerful configuration system based on JSON. Unfortunately, there are
+quirks to the NetBoot protocol that require a custom hook to make things work.
+
+Install Kea, along with the building requirements for the hook.
+
+```
+sudo apt install kea-dhcp4-server kea-dev libboost-dev build-essential git
+```
+
+Then clone this repo with `git`. A simple `make` will produce the needed shared
+library. Run `sudo make install` to drop it into the Kea hooks library folder.
+
+> [!NOTE]
+> Starting with 2.6.3, Kea will only load hooks libraries from a single
+> directory, defined at compile time. For details refer to
+> <https://kea.readthedocs.io/en/kea-2.6.3/arm/hooks.html>. The Makefile will
+> try to auto-resolve this but if you run into trouble you may need to manually
+> redefine KEA_USER_HOOKS.
+
+If you're looking for copy/paste instructions something like this should work.
+
+```
+mkdir -p ~/src
+cd ~/src
+git clone https://github.com/saybur/kea-mboot.git
+cd kea-mboot
+make
+sudo make install
+```
+
+All this hook does is re-order the BOOTP options, which _appears_ to be
+required or the Mac will refuse to boot. I couldn't figure out how to do this
+natively in Kea.
+
+The configuration file lives in `/etc/kea/kea-dhcp4.conf`. A full example
+configuration file is in this repo. You will need to tweak settings for your
+specific network setup (interface assignment, address range, yada yada).
+The following sections are important to get network booting operational.
+
+### `"option-def"`
+
+This portion defines the structure of the various netboot options. Include
+it verbatim in your configuration file. The various "code" entries correspond
+to the BOOTP options used by NetBoot 1.0, which are described in more detail
+here:
+
+<http://web.archive.org/web/20030316193425/http://mike.passwall.com/macnc/analysis.html>
+
+### `"client-classes"`
+
+This defines the test for a NetBoot client and the response given back. Most
+values should not be changed from the example, except for the following:
+
+- "next-server" is the TFTP server's IP address (I've only tested this when it
+  is the same as the Netatalk server IP).
+- "boot-file-name" is the TFTP server path where the ROM resides (see later
+  section for TFTP configuration).
+- "server-hostname" is the Netatalk server's IP address.
+- "broadcast-address" should match the network's value.
+- "netboot-user" is the Netatalk user accessing the share.
+- "netboot-pass" is the Netatalk user's password.
+- "netboot-client" is the directory where the client's writable image resides.
+- "netboot-img-boot" is the bootable hard drive image (may be read only), using
+  a combination of several values:
+    - IP address of the AppleTalk server,
+    - network port to connect to,
+    - share name,
+    - "0" (do not change),
+    - "2" (do not change),
+    - The full path to the relevant image, using `\u0000` as the path
+      separator.
+- "netboot-img-apps" is the applications image, using the format above, also
+  possibly read-only.
+- "netboot-img-client" is the writeable portion of the image for the specific
+  connecting client, again using the above format, and probably residing in a
+  directory matching "netboot-client" above.
+
+It should be possible to override the most important per-client values
+("netboot-client" and "netboot-img-client") via Kea static leases or other
+such approaches, but since I only have one system I'm trying to boot I haven't
+experimented with how to configure that.
+
+### `"hooks-libraries"`
+
+The example file enables both the required BOOTP support and the custom hook
+that handles reordering the values for NetBoot. Include this verbatim.
+
+> [!NOTE]
+> The hook will look for the `netboot` class name and won't modify packets
+> unless it is present. That said, I don't have other BOOTP clients to test
+> with so you might still encounter weird cases: please report if you do.
+
+### Finish Up
+
+I recommend reading the writeup at
+<http://web.archive.org/web/20030207040746/http://mike.passwall.com/macnc/>
+to understand more about what the options themselves do. In 2025, Kea allows
+this to be cleaner (or at least leave out the hexadecimal ASCII).
+
+Start Kea and enable it after each boot.
+
+    sudo systemctl enable kea-dhcp4-server
+    sudo systemctl start kea-dhcp4-server
+
+I've found Kea's configuration syntax is a bit quirky, check the logs carefully
+for errors prior to proceeding further.
+
+    sudo journalctl -u kea-dhcp4
+
 ## Server Setup
 
 In broad strokes, you need Netatalk set up as follows:
@@ -105,40 +227,6 @@ Install a TFP server, like `tftpd-hpa`. On Debian that package has a sane
 default config and sets up `/srv/tftp` as the hosting directory. Copy
 `Mac OS ROM` into a `boot` subfolder such that the final path on disk is
 `/srv/tftp/boot/MacROM`.
-
-### Kea
-
-Kea has a really powerful configuration system based on JSON. Unfortunately,
-there are some quirks to the NetBoot protocol that require a custom hook be
-installed. Get Kea and the building requirements for the hook:
-
-```
-sudo apt install kea-dhcp4-server kea-dev libboost-dev build-essential git
-```
-
-Then clone this repo with `git`. A simple `make` should produce the needed
-shared library, which you can install with `sudo make install` to put it into
-`/usr/local/lib/kea/hooks/mboot-hook.so`.
-
-By default, AppArmor prevents this library from loading. Edit
-`/etc/apparmor.d/usr.sbin.kea-dhcp4` and add the following line before the
-ending brace (don't omit the comma).
-
-```
-/usr/local/lib/kea/hooks/mboot-hook.so rm,
-```
-
-All this hook does is re-order the BOOTP options, which _appears_ to be
-required or the system will refuse to boot. I couldn't figure out how to do
-this natively in Kea.
-
-The configuration file lives in `/etc/kea/kea-dhcp4.conf`. An example config
-file is in this repo. I strongly recommend reading the writeup at
-<http://web.archive.org/web/20030207040746/http://mike.passwall.com/macnc/>
-to understand more about what the options themselves do. In 2024, Kea allows
-this to be cleaner, at least omitting the hexadecimal ASCII.
-
-Make sure you restart Kea after getting everything set up.
 
 ## Booting
 

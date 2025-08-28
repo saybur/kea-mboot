@@ -3,7 +3,7 @@
 KEA_MSG_COMPILER ?= kea-msg-compiler
 KEA_INCLUDE ?= /usr/include/kea
 KEA_LIB ?= /usr/lib
-KEA_USER_HOOKS ?= /usr/local/lib/kea/hooks
+KEA_USER_HOOKS ?= $(shell /usr/sbin/kea-dhcp4 -W | grep Hooks\ directory | awk '{print $$3}')
 
 SRCS = src/callouts.cc src/log.cc src/messages.cc src/version.cc
 OBJS = $(SRCS:.cc=.o)
