@@ -67,16 +67,24 @@ pieces of software are needed:
 
 ### Images
 
-Apple used to make images available in a `NetBoot9.dmg` file, see
+Apple used to make boot images available in a `NetBoot9.dmg` file, see
 <https://systemfolder.wordpress.com/2020/02/11/netboot-to-rescue/> for details.
-If you have a copy, getting the images out of it is an exercise left for the
-reader. Bear in mind you _must_ preserve both the data and resource forks of
-the image files or they will not work!
+If you have a copy, you can extract the components needed using modern
+utilities. While `7z` works fine for many DMG files this particular one
+required the `dmg2img` to get the process started. Install both tools:
 
-The user image can just be a copy of the applications image or a new Disk Copy
-6.3 image you create. Remember anything you make can be placed in a MacBinary
-II `.bin` file and unpacked on a Netatalk server via the _megatron_ `unbin`
-tool, which will properly restore the resource fork.
+```
+sudo apt install dmg2img p7zip-full
+```
+
+Unpack the file containing the images:
+
+```
+dmg2img NetBoot9.dmg NetBoot9.img
+7z e NetBoot9.img "NetBoot for Mac OS 9/English/NetBoot.pkg/Contents/Resources/NetBoot.pax.gz"
+```
+
+Keep `NetBoot.pax.gz` around, you'll need it later.
 
 ## Server Setup
 
