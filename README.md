@@ -1,46 +1,47 @@
 Netboot 1.0 for Retro Enthusiasts
 =================================
 
-This page documents my "adventure" trying to get a 1998 Rev B iMac net-booting
-OS 9 via modern (2024) open source server software. This includes a custom Kea
-DHCP server hook, along with some configuration examples and general hints.
+This page documents my "adventure" trying to get a 1998 Rev B iMac booting
+MacOS 9 over the network via modern (2025) open source server software. This
+includes a custom Kea DHCP server hook, along with some configuration examples
+and general hints.
 
-This guide assumes a lot, mainly familiarly with Linux, old Macs, and
-networking more generally. If that sounds intimidating you may want to consider
-a different approach than net booting, it is kind of a PITA. With that said, I
-hope this can be the basis for something that an out-of-the-box project can
-integrate to make it easier. Barring that, I welcome input (including PRs) to
-fix/amend/clarify/whatever anything here. My goal is to let this serve as a
-template for others to net-boot their systems with fewer headaches than I had
-trying to get it working.
+This guide assumes a lot: familiarly with Linux, old Macs, and networking more
+generally. If that sounds intimidating you may want to consider a different
+approach than net-booting, it is kind of a PITA. With that said, I hope this
+documentation/hook will let others boot their systems off a network with fewer
+headaches than I had trying to get it working, or even serve as the basis for
+an out-of-the-box project to integrate.
 
 Most of the credit here belongs to Michael Egan, Rob Lineweaver, and many
-others, who got this working in production environments around the turn of the
+others who got this working in production environments around the turn of the
 millenium and did a great job documenting their work. Major thanks to all of
 them, this would have been impossible to figure out without their efforts.
 
+I welcome input (including PRs) to fix/amend/clarify/whatever anything here.
+
 ## Raison d'etre
 
-I have a 1998 Rev B iMac without a working CD-ROM drive. Apple rather famously
-made these systems without many external bus options and Open Firmware wasn't
+I have a 1998 Rev B iMac without a working CD-ROM drive. Apple famously made
+these systems without many external bus options and Open Firmware wasn't
 cooperating with attempts to boot from USB. Rather than do sensible things,
 like fix/replace the CD drive or pull the hard drive for installation on
 another computer, I foolishly thought, "why not use this fancy NetBoot thing to
 do the OS installation, I mean, _how hard could it be_?"
 
-## You Will Need These Things
+## Things You'll Need
 
 - NetBoot 1.0 compatible Mac computer,
-- Modern Linux/BSD server, with services,
+- Modern Linux/BSD server,
 - A Mac ROM and disk images for your server,
-- Working network for all these devices.
+- Functional networking for these devices.
 
-I'll go through each of these in a bit more detail.
+I'll go through each item in a bit more detail.
 
 ### Compatible Systems
 
-This process only works with the BOOTP based NetBoot 1.0, which is implemented
-on the following New World ROM systems:
+This process only works with the BOOTP based NetBoot 1.0, implemented on the
+following New World ROM systems:
 
 - some iMacs (tray-loaders),
 - some early iBooks,
@@ -50,32 +51,19 @@ on the following New World ROM systems:
 Later models use a newer DHCP-based approach called BDSP (NetBoot 2.0). This is
 better documented and there are open source options that could potentially
 work, like <https://github.com/bruienne/bsdpy> and possibly others. Based on
-the limited information I could find I think those newer systems basically
-_require_ a BDSP server to work (at least I couldn't convince my Summer 2000
-iMac DV+ to boot after getting the original iMac working).
+the limited information I could find I think those newer systems _require_ a
+BDSP server to work (and anecdotally I couldn't convince my Summer 2000 iMac
+DV+ to boot after getting the original iMac working).
 
 ### Server Software
 
-This all assumes the server will run Debian 12 (bookworm) but the basic process
-should work with any modern Linux/BSD system, you'll just need to tweak things
-a bit. The following pieces of software are needed:
+This writeup assumes the server will run Debian 13 (_trixie_) but the services
+and basic process should work with any modern Linux/BSD system. The following
+pieces of software are needed:
 
 - Kea DHCP server (<https://www.isc.org/kea/>),
 - Netatalk (<https://netatalk.io/>,
 - a TFTP server
-
-Netatalk is undergoing a renaissance thanks to hard work by the estimable
-@rdmark, @NJRoadfan, and others. I've been using Netatalk 2 for ages but
-Netatalk 4.0 is brand-new as of this writing and includes the AppleTalk support
-obsoleted in Netatalk 3. It also introduces the 3.0 configuration syntax, which
-I am not familiar with, which makes config file examples tricky to give. For
-now, you can follow
-[their guide](https://netatalk.io/docs/Installing-Netatalk-2-on-Debian-Linux)
-for how to build and install it on Debian and I'll try to get examples updated
-once I give Netatalk 4 a spin.
-
-The remaining packages are in the Debian repos and are just an `apt get` away!
-:)
 
 ### Images
 
