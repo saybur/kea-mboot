@@ -208,25 +208,96 @@ for errors prior to proceeding further.
 
     sudo journalctl -u kea-dhcp4
 
-## Server Setup
+## Setup Netatalk Server
 
-In broad strokes, you need Netatalk set up as follows:
+Starting with Debian _trixie_ Netatalk 4.0 is included in the main repositories.
+Much appreciation to the Netatalk maintainers, they're doing a fantastic job
+keeping this venerable package running on modern systems!
 
-- AFP over IP enabled and working (default port 548/TCP),
-- A user `netboot` created with a password of `12345lol`,
-- A server share called `NetBootVol` to house files,
-- `NetBootDir/NetBoot HD.img` created, read-only permissions,
-- `NetBootDir/Applications HD.img`, read-only permissions,
-- `NetBootDir/imac_revb/User.img` read/write permissions for the
-  `netboot` user (along with the `imac_revb` containing folder).
+Install Netatalk.
 
-The Kea config example assumes the above setup; obviously much of this can be
-tweaked once you verify it works.
+    sudo apt install netatalk
 
-Install a TFP server, like `tftpd-hpa`. On Debian that package has a sane
-default config and sets up `/srv/tftp` as the hosting directory. Copy
-`Mac OS ROM` into a `boot` subfolder such that the final path on disk is
-`/srv/tftp/boot/MacROM`.
+Set up the share for the Mac to connect to by adding the following to
+`/etc/netatalk/afp.conf`
+
+```
+[NetBootVol]
+path = /srv/netboot
+valid users = netboot
+```
+
+Create the user that will be connecting to this share.
+
+    sudo adduser --system --group --shell /usr/sbin/nologin netboot
+
+Assign them the password `12345lol` (or whatever you changed the relevant field
+in `kea-dhcp4.conf`) via `sudo passwd netboot`.
+
+> [!CAUTION]
+> This has obvious security implications. Use care to ensure this user cannot
+> log into the system.
+
+Create the location being served.
+
+```
+sudo mkdir -p /srv/netboot/NetBootDir
+```
+
+If in use, add a firewall rule allowing port 548/TCP. Once done, enable and
+(re)start the server.
+
+    sudo systemctl stop netatalk
+    sudo systemctl enable netatalk
+    sudo systemctl start netatalk
+
+### Add Files
+
+Unpack `NetBoot.pax.gz` from earlier to a convenient location outside the
+Netatalk share.
+
+```
+gzip -d NetBoot.pax.gz
+7z x NetBoot.pax
+```
+
+This will produce `NetBootInstallation` containing three files and their
+corresponding resource forks in `._` notation. Copy this folder to the share,
+take ownership for further changes, and allow others to browse into the folder.
+
+```
+sudo cp -r NetBootInstallation /srv/netboot/NetBootDir
+cd /srv/netboot
+sudo chown -R $USER:$GROUP NetBootDir
+chmod +x NetBootDir
+```
+
+The Applications image can be copied to create a suitable user image. Create
+it now in the appropriate location.
+
+```
+cd NetBootDir
+mkdir imac_revb
+cp Applications\ HD.img imac_revb/User.img
+cp ._Applications\ HD.img imac_revb/._User.img
+sudo chown -R netboot:netboot imac_revb
+```
+
+## TFTP Server
+
+Install a TFP server. Any should work but this assumes `tftpd-hpa`, which seems
+to work well for this purpose (_not_ `tftp-hpa` the client).
+
+    sudo apt install tftpd-hpa
+
+On Debian this package starts by default with a sane config, serving
+`/srv/tftp`. Copy `Mac OS ROM` into a `boot` subfolder such that the final path
+on disk is `/srv/tftp/boot/MacROM`. This will correspond to the Kea
+configuration example. Assuming the files for Netatalk are in `/srv/netboot`
+you can use the following commands.
+
+    sudo mkdir -p /srv/tftp/boot
+    sudo cp /srv/netboot/NetBootDir/Mac\ OS\ ROM /srv/tftp/boot/MacROM
 
 ## Booting
 
@@ -251,7 +322,9 @@ potentially useful hints:
   during bootup. You will need server logs, particularly from `afpd`. Suggest
   turning on debug logging, which will helpfully emit helpful errors like
   `AFP_ERR_ACCESS` when the client tries to fetch a file with incorrect
-  permissions (or similar troubles).
+  permissions (or similar troubles). This can be done by adding a line like
+  `log level = default:debug` under the `[Global]` section in `afpd.conf` and
+  watching with `sudo journalctl -fu netatalk`.
 
 ## References
 
