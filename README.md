@@ -218,6 +218,12 @@ ea = ad
 > You only _need_ `ea = ad` if you're using Option 2 below for handling the
 > resource forks. Read the Netatalk documentation on this point if uncertain.
 
+Early versions of NetBoot require cleartext passwords to work properly. You can
+enable those by setting `uam list = uams_clrtxt.so` under the [Global] section
+in that same file. You may want to read the fine
+[Netatalk documentation](https://netatalk.io/manual/en/afp.conf.5) to determine
+what other UAMs to enable.
+
 Create the user that will be connecting to this share.
 
     sudo adduser --system --group --shell /usr/sbin/nologin netboot
@@ -226,8 +232,9 @@ Use `sudo passwd netboot` and assign the password `12345lol` (or whatever you
 changed the relevant field to in `kea-dhcp4.conf`).
 
 > [!CAUTION]
-> This has obvious security implications. Use care to ensure this user cannot
-> log into the system.
+> Unencrypted and weak passwords like these have obvious security implications!
+> Ensure this user cannot sign in to the system normally and take other
+> appropriate precautions.
 
 Create the location being served under your main user account.
 
