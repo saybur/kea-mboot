@@ -214,6 +214,10 @@ valid users = netboot
 ea = ad
 ```
 
+> [!NOTE]
+> You only _need_ `ea = ad` if you're using Option 2 below for handling the
+> resource forks. Read the Netatalk documentation on this point if uncertain.
+
 Create the user that will be connecting to this share.
 
     sudo adduser --system --group --shell /usr/sbin/nologin netboot
@@ -282,13 +286,21 @@ cp "NetBootInstallation/Applications HD.img" /srv/netboot/client/User.img
 > This isn't a typo: the first two files are the main images and the third is a
 > scratch image, which in this case is just a copy of the applications image.
 
-From this point you have two different paths to take depending on how you want
-to handle the resource forks. _Only use one of these two approaches!_
+From this point you have three different paths to take depending on how you
+want to handle the resource forks. _Only use one of these approaches!_
 
-### Option 1: .AppleDouble folders/files
+### Option 1: Upload Files
 
-This is the "default" assumption for this guide. In this approach the old
-`.AppleDouble` folders are used with the resource fork added to files with a
+If you have access to a system that can correctly handle the dot files in the
+`.pax` archive and has an AFP client (like OSX) you can just unpack and upload
+the images after configuring the share appropriately. If you do this, delete
+the files copied in the previous step prior to uploading new ones, taking care
+to preserve the paths exactly as shown.
+
+### Option 2: .AppleDouble folders/files
+
+This approach does not require another Mac and can be done from the server.
+`.AppleDouble` folders are used with the resource fork added to files with the
 hacky `admerge` script I put together. Build that first.
 
     gcc ~/src/kea-mboot/util/admerge.c -o ~/src/kea-mboot/util/admerge
@@ -317,7 +329,7 @@ Assign write permissions to the netboot user for the client files.
 
     sudo chown -R netboot:netboot /srv/netboot/client
 
-### Option 2: Extended Attributes (Untested)
+### Option 3: Extended Attributes (Untested)
 
 The alternate way to do this with Netatalk is via the built-in `ad` utility,
 extended attributes, and the dot files (`._`). I was not able to get this
