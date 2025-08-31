@@ -63,14 +63,14 @@ and basic process should work with any modern Linux/BSD system. The following
 pieces of software are needed:
 
 - Kea DHCP server (<https://www.isc.org/kea/>),
-- Netatalk (<https://netatalk.io/>,
+- Netatalk (<https://netatalk.io/>),
 - a TFTP server
 
 ### Images
 
 Apple used to make boot images available in a `NetBoot9.dmg` file, see
-<https://systemfolder.wordpress.com/2020/02/11/netboot-to-rescue/> for details.
-You will either need this file or correctly-formatted equivalents.
+[here](https://systemfolder.wordpress.com/2020/02/11/netboot-to-rescue/) for
+details. You will either need this file or correctly-formatted equivalents.
 
 ## Setup DHCP Server (Kea)
 
@@ -94,8 +94,9 @@ Install Kea, along with the building requirements for the hook.
 sudo apt install kea-dhcp4-server kea-dev libboost-dev build-essential git
 ```
 
-Then clone this repo with `git`. A simple `make` will produce the needed shared
-library. Run `sudo make install` to drop it into the Kea hooks library folder.
+Then clone this repo with `git`. A simple `make` in the `src` directory will
+produce the needed shared library. Run `sudo make install` to drop it into the
+Kea hooks library folder.
 
 > [!NOTE]
 > Starting with 2.6.3, Kea will only load hooks libraries from a single
