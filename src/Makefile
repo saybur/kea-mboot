@@ -5,7 +5,7 @@ KEA_INCLUDE ?= /usr/include/kea
 KEA_LIB ?= /usr/lib
 KEA_USER_HOOKS ?= $(shell /usr/sbin/kea-dhcp4 -W | grep Hooks\ directory | awk '{print $$3}')
 
-SRCS = src/callouts.cc src/log.cc src/messages.cc src/version.cc
+SRCS = callouts.cc log.cc messages.cc version.cc
 OBJS = $(SRCS:.cc=.o)
 TARGET = mboot-hook
 
@@ -19,7 +19,7 @@ $(TARGET).so: $(OBJS)
 	$(CXX) -c $(CXXFLAGS) -o $@ $<
 
 clean:
-	rm -f src/*.o
+	rm -f *.o
 	rm -f $(TARGET).so
 
 install:
