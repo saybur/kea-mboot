@@ -34,9 +34,10 @@ do the OS installation, I mean, _how hard could it be_?"
 - NetBoot 1.0 compatible Mac computer,
 - Modern Linux/BSD server,
 - A Mac ROM and disk images for your server,
+- Files from this repository,
 - Functional networking for these devices.
 
-I'll go through each item in a bit more detail.
+I'll go through some of these items in a bit more detail.
 
 ### Compatible Systems
 
@@ -69,22 +70,7 @@ pieces of software are needed:
 
 Apple used to make boot images available in a `NetBoot9.dmg` file, see
 <https://systemfolder.wordpress.com/2020/02/11/netboot-to-rescue/> for details.
-If you have a copy, you can extract the components needed using modern
-utilities. While `7z` works fine for many DMG files this particular one
-required the `dmg2img` to get the process started. Install both tools:
-
-```
-sudo apt install dmg2img p7zip-full
-```
-
-Unpack the file containing the images:
-
-```
-dmg2img NetBoot9.dmg NetBoot9.img
-7z e NetBoot9.img "NetBoot for Mac OS 9/English/NetBoot.pkg/Contents/Resources/NetBoot.pax.gz"
-```
-
-Keep `NetBoot.pax.gz` around, you'll need it later.
+You will either need this file or correctly-formatted equivalents.
 
 ## Setup DHCP Server (Kea)
 
@@ -124,7 +110,7 @@ If you're looking for copy/paste instructions something like this should work.
 mkdir -p ~/src
 cd ~/src
 git clone https://github.com/saybur/kea-mboot.git
-cd kea-mboot
+cd kea-mboot/src
 make
 sudo make install
 ```
@@ -225,23 +211,26 @@ Set up the share for the Mac to connect to by adding the following to
 [NetBootVol]
 path = /srv/netboot
 valid users = netboot
+ea = ad
 ```
 
 Create the user that will be connecting to this share.
 
     sudo adduser --system --group --shell /usr/sbin/nologin netboot
 
-Assign them the password `12345lol` (or whatever you changed the relevant field
-in `kea-dhcp4.conf`) via `sudo passwd netboot`.
+Use `sudo passwd netboot` and assign the password `12345lol` (or whatever you
+changed the relevant field to in `kea-dhcp4.conf`).
 
 > [!CAUTION]
 > This has obvious security implications. Use care to ensure this user cannot
 > log into the system.
 
-Create the location being served.
+Create the location being served under your main user account.
 
 ```
-sudo mkdir -p /srv/netboot/NetBootDir
+sudo mkdir /srv/netboot
+sudo chown $USER:$GROUP /srv/netboot
+mkdir /srv/netboot/client
 ```
 
 If in use, add a firewall rule allowing port 548/TCP. Once done, enable and
@@ -251,38 +240,6 @@ If in use, add a firewall rule allowing port 548/TCP. Once done, enable and
     sudo systemctl enable netatalk
     sudo systemctl start netatalk
 
-### Add Files
-
-Unpack `NetBoot.pax.gz` from earlier to a convenient location outside the
-Netatalk share.
-
-```
-gzip -d NetBoot.pax.gz
-7z x NetBoot.pax
-```
-
-This will produce `NetBootInstallation` containing three files and their
-corresponding resource forks in `._` notation. Copy this folder to the share,
-take ownership for further changes, and allow others to browse into the folder.
-
-```
-sudo cp -r NetBootInstallation /srv/netboot/NetBootDir
-cd /srv/netboot
-sudo chown -R $USER:$GROUP NetBootDir
-chmod +x NetBootDir
-```
-
-The Applications image can be copied to create a suitable user image. Create
-it now in the appropriate location.
-
-```
-cd NetBootDir
-mkdir imac_revb
-cp Applications\ HD.img imac_revb/User.img
-cp ._Applications\ HD.img imac_revb/._User.img
-sudo chown -R netboot:netboot imac_revb
-```
-
 ## TFTP Server
 
 Install a TFP server. Any should work but this assumes `tftpd-hpa`, which seems
@@ -291,13 +248,96 @@ to work well for this purpose (_not_ `tftp-hpa` the client).
     sudo apt install tftpd-hpa
 
 On Debian this package starts by default with a sane config, serving
-`/srv/tftp`. Copy `Mac OS ROM` into a `boot` subfolder such that the final path
+`/srv/tftp`.
+
+## Setup Files
+
+You can extract `NetBoot9.dmg` using utilities on a modern system. While `7z`
+works fine for many DMG files this one required `dmg2img` to get the process
+started. Install both tools:
+
+    sudo apt install dmg2img p7zip-full
+
+Translate and unpack the file containing the images to a convenient location.
+
+```
+dmg2img NetBoot9.dmg NetBoot9.img
+7z e NetBoot9.img "NetBoot for Mac OS 9/English/NetBoot.pkg/Contents/Resources/NetBoot.pax.gz"
+gzip -d NetBoot.pax.gz
+7z x NetBoot.pax
+chmod +x NetBootInstallation
+```
+
+Inside the `NetBootInstallation` folder there are three images and their
+corresponding resource forks in `._` notation. Place copies of the main files
+into the Netatalk share.
+
+```
+cp "NetBootInstallation/NetBoot HD.img" /srv/netboot/NetBoot.img
+cp "NetBootInstallation/Applications HD.img" /srv/netboot/Applications.img
+cp "NetBootInstallation/Applications HD.img" /srv/netboot/client/User.img
+```
+
+> [!NOTE]
+> This isn't a typo: the first two files are the main images and the third is a
+> scratch image, which in this case is just a copy of the applications image.
+
+From this point you have two different paths to take depending on how you want
+to handle the resource forks. _Only use one of these two approaches!_
+
+### Option 1: .AppleDouble folders/files
+
+This is the "default" assumption for this guide. In this approach the old
+`.AppleDouble` folders are used with the resource fork added to files with a
+hacky `admerge` script I put together. Build that first.
+
+    gcc ~/src/kea-mboot/util/admerge.c -o ~/src/kea-mboot/util/admerge
+
+Have Netatalk generate blank AppleDouble files for these with the following
+command.
+
+    sudo dbd -f /srv/netboot
+
+This may produce a bunch of messages the first time but a subsequent run
+should output nothing.
+
+Use the `admerge` utility to inject the resource fork into these blank files.
+
+```
+~/src/kea-mboot/util/admerge "NetBootInstallation/._NetBoot HD.img" /srv/netboot/.AppleDouble/NetBoot.img
+~/src/kea-mboot/util/admerge "NetBootInstallation/._Applications HD.img" /srv/netboot/.AppleDouble/Applications.img
+~/src/kea-mboot/util/admerge "NetBootInstallation/._Applications HD.img" /srv/netboot/client/.AppleDouble/User.img
+```
+
+Rebuild the database again.
+
+    sudo dbd -f /srv/netboot
+
+Assign write permissions to the netboot user for the client files.
+
+    sudo chown -R netboot:netboot /srv/netboot/client
+
+### Option 2: Extended Attributes (Untested)
+
+The alternate way to do this with Netatalk is via the built-in `ad` utility,
+extended attributes, and the dot files (`._`). I was not able to get this
+working but I wouldn't be shocked if it was just due to errors on my part. If
+you would like to try, see the posts I made on 68kmla while I bumbled my way
+through the process:
+
+<https://68kmla.org/bb/index.php?threads/netatalk-4-0-future-proofing-apple-file-sharing.47958/post-571137>
+
+Also be sure to remove `ea = ad` in the Netatalk share configuration.
+
+### ROM
+
+Regardless of how you handle Netatalk you'll still need the ROM in TFTP. Copy
+`Mac OS ROM` into a `boot` subfolder of the TFTP share such that the final path
 on disk is `/srv/tftp/boot/MacROM`. This will correspond to the Kea
-configuration example. Assuming the files for Netatalk are in `/srv/netboot`
-you can use the following commands.
+configuration example.
 
     sudo mkdir -p /srv/tftp/boot
-    sudo cp /srv/netboot/NetBootDir/Mac\ OS\ ROM /srv/tftp/boot/MacROM
+    sudo cp "NetBootInstallation/Mac OS ROM" /srv/tftp/boot/MacROM
 
 ## Booting
 
